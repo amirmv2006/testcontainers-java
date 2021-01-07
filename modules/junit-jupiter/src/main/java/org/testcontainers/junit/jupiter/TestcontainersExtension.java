@@ -1,9 +1,7 @@
 package org.testcontainers.junit.jupiter;
 
 import lombok.Getter;
-import org.junit.jupiter.api.extension.AfterAllCallback;
 import org.junit.jupiter.api.extension.AfterEachCallback;
-import org.junit.jupiter.api.extension.BeforeAllCallback;
 import org.junit.jupiter.api.extension.BeforeEachCallback;
 import org.junit.jupiter.api.extension.ConditionEvaluationResult;
 import org.junit.jupiter.api.extension.ExecutionCondition;
@@ -13,6 +11,7 @@ import org.junit.jupiter.api.extension.ExtensionContext.Namespace;
 import org.junit.jupiter.api.extension.ExtensionContext.Store;
 import org.junit.jupiter.api.extension.ExtensionContext.Store.CloseableResource;
 import org.junit.jupiter.api.extension.TestInstancePostProcessor;
+import org.junit.jupiter.api.extension.TestInstancePreDestroyCallback;
 import org.junit.platform.commons.support.AnnotationSupport;
 import org.junit.platform.commons.util.AnnotationUtils;
 import org.junit.platform.commons.util.Preconditions;
@@ -23,7 +22,6 @@ import org.testcontainers.lifecycle.TestDescription;
 import org.testcontainers.lifecycle.TestLifecycleAware;
 
 import java.lang.reflect.Field;
-import java.lang.reflect.Method;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
@@ -34,7 +32,8 @@ import java.util.stream.Stream;
 import static java.util.stream.Collectors.toList;
 import static org.testcontainers.junit.jupiter.FilesystemFriendlyNameGenerator.filesystemFriendlyNameOf;
 
-class TestcontainersExtension implements BeforeEachCallback, BeforeAllCallback, AfterEachCallback, AfterAllCallback, ExecutionCondition, TestInstancePostProcessor {
+class TestcontainersExtension implements BeforeEachCallback, AfterEachCallback, ExecutionCondition,
+    TestInstancePostProcessor, TestInstancePreDestroyCallback {
 
     private static final Namespace NAMESPACE = Namespace.create(TestcontainersExtension.class);
 
@@ -46,14 +45,9 @@ class TestcontainersExtension implements BeforeEachCallback, BeforeAllCallback, 
     public void postProcessTestInstance(final Object testInstance, final ExtensionContext context) {
         Store store = context.getStore(NAMESPACE);
         store.put(TEST_INSTANCE, testInstance);
-    }
-
-    @Override
-    public void beforeAll(ExtensionContext context) {
         Class<?> testClass = context.getTestClass()
             .orElseThrow(() -> new ExtensionConfigurationException("TestcontainersExtension is only supported for classes."));
 
-        Store store = context.getStore(NAMESPACE);
         List<StoreAdapter> sharedContainersStoreAdapters = findSharedContainers(testClass);
 
         sharedContainersStoreAdapters.forEach(adapter -> store.getOrComputeIfAbsent(adapter.getKey(), k -> adapter.start()));
@@ -69,7 +63,7 @@ class TestcontainersExtension implements BeforeEachCallback, BeforeAllCallback, 
     }
 
     @Override
-    public void afterAll(ExtensionContext context) {
+    public void preDestroyTestInstance(final ExtensionContext context) throws Exception {
         signalAfterTestToContainersFor(SHARED_LIFECYCLE_AWARE_CONTAINERS, context);
     }
 
